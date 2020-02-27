@@ -1,0 +1,19 @@
+{
+    "name": "@airtable/url-preview-block",
+    "version": "1.0.0",
+    "description": "When a user selects a record in grid view that has a supported URL, this block shows the corresponding preview.",
+    "scripts": {
+        "lint": "eslint frontend"
+    },
+    "dependencies": {
+        "@airtable/blocks": "latest",
+        "react": "^16.9.0",
+        "react-dom": "^16.9.0"
+    },
+    "devDependencies": {
+        "eslint": "^6.3.0",
+        "eslint-plugin-react": "^7.14.3",
+        "eslint-plugin-react-hooks": "^2.0.1"
+    },
+    "license": "MIT"
+}

@@ -6,23 +6,57 @@ import {
     useBase,
     useRecordById,
     useLoadable,
+    useSettingsButton,
+    useViewport,
     useWatchable,
     Box,
+    Dialog,
+    Heading,
+    Link,
     Text,
     TextButton,
-    Dialog,
-    Link,
-    Heading,
 } from '@airtable/blocks/ui';
+
+import {useSettings} from './settings';
+import SettingsForm from './SettingsForm';
 
 // How this block chooses a preview to show:
 //
-// - The user selects a row in grid view.
-// - The block looks in the selected field for a supported URL
+// Without a specified Table & Field:
+//  - The user selects a row in grid view.
+//  - The block looks in the Selected Field for a supported URL
 //   (e.g. https://www.youtube.com/watch?v=KYz2wyBy3kc)
-// - The block uses this URL to construct an embed URL and inserts this URL into an iframe.
-
+//  - The block uses this URL to construct an embed URL and inserts this URL into an iframe.
+//
+// With a Specified Table & Specified Field:
+//
+//  - The user opens Settings and selects a Specified Table and Specified Field for URL previews.
+//  - The user selects a row in grid view.
+//  - If the Selected Field in the Active Table match the Specified Field & Specified Table, then:
+//      - The block looks in the Selected Field for a supported URL
+//          (e.g. https://www.youtube.com/watch?v=KYz2wyBy3kc)
+//      - If the block supports this URL, then:
+//          - The block uses this URL to construct an embed URL and inserts this URL into an iframe.
+//      - Else,
+//          - Display: "Select a cell to see a preview, View supported URLs"
+//  - Else,
+//      - If the Active Table does not match the Specified Table, then:
+//          - Display: "Switch to the “[Specified Table]” table to see previews."
+//      - If the Selected Field does match the Specified Field, then:
+//          - Display: "Switch to the “[Specified Field]” field to see previews."
+//
+//
 function UrlPreviewBlock() {
+    const viewport = useViewport();
+    const [isSettingsVisible, setIsSettingsVisible] = useState(false);
+    useSettingsButton(() => {
+        if (!isSettingsVisible) {
+            viewport.enterFullscreenIfPossible();
+        }
+        setIsSettingsVisible(!isSettingsVisible);
+    });
+    const settingsValidationResult = useSettings();
+
     // Caches the currently selected record and field in state. If the user
     // selects a record and a preview appears, and then the user de-selects the
     // record (but does not select another), the preview will remain. This is
@@ -65,32 +99,77 @@ function UrlPreviewBlock() {
     });
 
     const base = useBase();
-    const table = base.getTableByIdIfExists(cursor.activeTableId);
+    const activeTable = base.getTableByIdIfExists(cursor.activeTableId);
 
-    // table is briefly null when switching to a newly created table.
-    if (!table) {
+    // activeTable is briefly null when switching to a newly created activeTable.
+    if (!activeTable) {
         return null;
     }
 
     return (
-        <RecordPreview
-            table={table}
-            selectedRecordId={selectedRecordId}
-            selectedFieldId={selectedFieldId}
-        />
+        <Box display="flex">
+            {isSettingsVisible ? (
+                <SettingsForm
+                    setIsSettingsVisible={setIsSettingsVisible}
+                    settings={settingsValidationResult.settings}
+                />
+            ) : (
+                <RecordPreview
+                    activeTable={activeTable}
+                    settingsValidationResult={settingsValidationResult}
+                    selectedRecordId={selectedRecordId}
+                    selectedFieldId={selectedFieldId}
+                />
+            )}
+        </Box>
     );
 }
 
 // Shows a preview, or a message about what the user should do to see a preview.
-function RecordPreview({table, selectedRecordId, selectedFieldId}) {
+function RecordPreview({activeTable, settingsValidationResult, selectedRecordId, selectedFieldId}) {
+    const {settings, isValid, message} = settingsValidationResult;
+    const {urlField} = settings;
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    let table = activeTable;
+    let content;
+
+    if (!isValid) {
+        content = (
+            <Container>
+                <Text>{message}</Text>
+            </Container>
+        );
+    }
+
+    // If the creator has specified a Table and Field for URL previews...
+    if (settings.table) {
+        table = settings.table;
+
+        if (!content) {
+            if (cursor.activeTableId !== table.id) {
+                content = (
+                    <Container>
+                        <Text>Switch to the “{table.name}” table to see previews.</Text>
+                    </Container>
+                );
+            } else {
+                if (urlField.id !== selectedFieldId) {
+                    content = (
+                        <Container>
+                            <Text>Switch to the “{urlField.name}” field to see previews.</Text>
+                        </Container>
+                    );
+                }
+            }
+        }
+    }
+
     // We use getFieldByIdIfExists because the field might be deleted.
     const selectedField = selectedFieldId ? table.getFieldByIdIfExists(selectedFieldId) : null;
-
-    // Triggers a re-render if the record changes. Preview URL cell value
-    // might have changed, or record might have been deleted.
     const selectedRecord = useRecordById(table, selectedRecordId ? selectedRecordId : '', {
-        fields: [selectedField],
+        // When an explicit urlField exists, limit lookup to that field,
+        // otherwise, use the selectedField
+        fields: [urlField || selectedField],
     });
 
     // Triggers a re-render if the user switches table or view.
@@ -104,7 +183,6 @@ function RecordPreview({table, selectedRecordId, selectedFieldId}) {
         </TextButton>
     );
 
-    let content;
     if (
         cursor.activeViewId === null || // activeViewId is briefly null when switching views
         table.getViewById(cursor.activeViewId).type !== ViewType.GRID
@@ -128,42 +206,45 @@ function RecordPreview({table, selectedRecordId, selectedFieldId}) {
             </Container>
         );
     } else {
-        // Using getCellValueAsString guarantees we get a string back.  If
-        // we use getCellValue, we might get back numbers, booleans, or
-        // arrays depending on the field type.
-        const previewUrl = getPreviewUrlForCellValue(
-            selectedRecord.getCellValueAsString(selectedField),
-        );
+        // content may have been set previously
+        if (!content) {
+            // Using getCellValueAsString guarantees we get a string back.  If
+            // we use getCellValue, we might get back numbers, booleans, or
+            // arrays depending on the field type.
+            const previewUrl = getPreviewUrlForCellValue(
+                selectedRecord.getCellValueAsString(selectedField),
+            );
 
-        // In this case, the FIELD_NAME field of the currently selected
-        // record either contains no URL, or contains a URL that cannot be
-        // resolved to a supported preview.
-        if (!previewUrl) {
-            content = (
-                <Container>
-                    <Text>No preview</Text>
-                    {viewSupportedURLsButton}
-                </Container>
-            );
-        } else {
-            content = (
-                <Container>
-                    <iframe
-                        // Using `key=previewUrl` will immediately unmount the
-                        // old iframe when we're switching to a new
-                        // preview. Otherwise, the old iframe would be reused,
-                        // and the old preview would stay onscreen while the new
-                        // one was loading, which would be a confusing user
-                        // experience.
-                        key={previewUrl}
-                        style={{flex: 'auto', width: '100%'}}
-                        src={previewUrl}
-                        frameBorder="0"
-                        allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                    />
-                </Container>
-            );
+            // In this case, the FIELD_NAME field of the currently selected
+            // record either contains no URL, or contains a URL that cannot be
+            // resolved to a supported preview.
+            if (!previewUrl) {
+                content = (
+                    <Container>
+                        <Text>No preview</Text>
+                        {viewSupportedURLsButton}
+                    </Container>
+                );
+            } else {
+                content = (
+                    <Container>
+                        <iframe
+                            // Using `key=previewUrl` will immediately unmount the
+                            // old iframe when we're switching to a new
+                            // preview. Otherwise, the old iframe would be reused,
+                            // and the old preview would stay onscreen while the new
+                            // one was loading, which would be a confusing user
+                            // experience.
+                            key={previewUrl}
+                            style={{flex: 'auto', width: '100%'}}
+                            src={previewUrl}
+                            frameBorder="0"
+                            allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                        />
+                    </Container>
+                );
+            }
         }
     }
 

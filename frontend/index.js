@@ -30,7 +30,8 @@ import SettingsForm from './SettingsForm';
 //
 // With a Specified Table & Specified Field:
 //
-//  - The user opens Settings and selects a Specified Table and Specified Field for URL previews.
+//  - The user may use "Settings" to set a Specified Table and Specified Field for URL previews.
+//  - The user may use "Settings" to toggle the Specified Table and Specified Field constraint.
 //  - The user selects a row in grid view.
 //  - If the Selected Field in the Active Table match the Specified Field & Specified Table, then:
 //      - The block looks in the Selected Field for a supported URL
@@ -110,8 +111,8 @@ function UrlPreviewBlock() {
         <Box display="flex">
             {isSettingsVisible ? (
                 <SettingsForm
-                    setIsSettingsVisible={setIsSettingsVisible}
                     settings={settingsValidationResult.settings}
+                    setIsSettingsVisible={setIsSettingsVisible}
                 />
             ) : (
                 <RecordPreview
@@ -128,7 +129,7 @@ function UrlPreviewBlock() {
 // Shows a preview, or a message about what the user should do to see a preview.
 function RecordPreview({activeTable, settingsValidationResult, selectedRecordId, selectedFieldId}) {
     const {settings, isValid, message} = settingsValidationResult;
-    const {urlField} = settings;
+    const {isEnforced, urlField} = settings;
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     let table = activeTable;
     let content;
@@ -142,7 +143,7 @@ function RecordPreview({activeTable, settingsValidationResult, selectedRecordId,
     }
 
     // If the creator has specified a Table and Field for URL previews...
-    if (settings.table) {
+    if (isEnforced && settings.table) {
         table = settings.table;
 
         if (!content) {
@@ -169,7 +170,7 @@ function RecordPreview({activeTable, settingsValidationResult, selectedRecordId,
     const selectedRecord = useRecordById(table, selectedRecordId ? selectedRecordId : '', {
         // When an explicit urlField exists, limit lookup to that field,
         // otherwise, use the selectedField
-        fields: [urlField || selectedField],
+        fields: [(isEnforced && urlField) || selectedField],
     });
 
     // Triggers a re-render if the user switches table or view.
@@ -184,8 +185,9 @@ function RecordPreview({activeTable, settingsValidationResult, selectedRecordId,
     );
 
     if (
-        cursor.activeViewId === null || // activeViewId is briefly null when switching views
-        table.getViewById(cursor.activeViewId).type !== ViewType.GRID
+        !content &&
+        (cursor.activeViewId === null || // activeViewId is briefly null when switching views
+            table.getViewById(cursor.activeViewId).type !== ViewType.GRID)
     ) {
         content = (
             <Container>

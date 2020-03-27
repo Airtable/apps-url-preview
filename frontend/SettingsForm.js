@@ -1,16 +1,17 @@
 import PropTypes from 'prop-types';
 import React, {Fragment} from 'react';
-import {FieldType, Table} from '@airtable/blocks/models';
+import {Field, FieldType, Table} from '@airtable/blocks/models';
 import {
     Box,
     Button,
     FieldPickerSynced,
     FormField,
     Heading,
+    SelectButtonsSynced,
     TablePickerSynced,
 } from '@airtable/blocks/ui';
 
-import {ConfigKeys} from './settings';
+import {ConfigKeys, IsEnforced} from './settings';
 
 function SettingsForm({setIsSettingsVisible, settings}) {
     return (
@@ -37,7 +38,7 @@ function SettingsForm({setIsSettingsVisible, settings}) {
                 {settings.table && (
                     <Fragment>
                         <FormField
-                            label="URL field"
+                            label="URL Field"
                             description="Must have field type: TEXT or URL"
                         >
                             <FieldPickerSynced
@@ -52,6 +53,22 @@ function SettingsForm({setIsSettingsVisible, settings}) {
                         </FormField>
                     </Fragment>
                 )}
+                <FormField
+                    label="Enforce Table & URL Field Settings?"
+                    description={`URL Previews will be shown for ${
+                        settings.isEnforced === IsEnforced.YES
+                            ? 'only the specified URL Field in the specified Table'
+                            : 'all valid fields in all available tables'
+                    }.`}
+                >
+                    <SelectButtonsSynced
+                        options={[
+                            {label: 'Yes', value: IsEnforced.YES},
+                            {label: 'No', value: IsEnforced.NO},
+                        ]}
+                        globalConfigKey={ConfigKeys.IS_ENFORCED}
+                    />
+                </FormField>
             </Box>
             <Box
                 flex="none"
@@ -72,7 +89,9 @@ function SettingsForm({setIsSettingsVisible, settings}) {
 SettingsForm.propTypes = {
     setIsSettingsVisible: PropTypes.func.isRequired,
     settings: PropTypes.shape({
+        isEnforced: PropTypes.bool,
         table: PropTypes.instanceOf(Table),
+        urlField: PropTypes.instanceOf(Field),
     }).isRequired,
 };
 

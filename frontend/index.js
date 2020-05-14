@@ -45,9 +45,7 @@ function UrlPreviewBlock() {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     useSettingsButton(() => setIsSettingsOpen(!isSettingsOpen));
 
-    const {
-        settings: {isEnforced, urlField, urlTable},
-    } = useSettings();
+    const {isValid} = useSettings();
 
     // Caches the currently selected record and field in state. If the user
     // selects a record and a preview appears, and then the user de-selects the
@@ -94,12 +92,11 @@ function UrlPreviewBlock() {
     const activeTable = base.getTableByIdIfExists(cursor.activeTableId);
 
     useEffect(() => {
-        // If the user is enforcing a specified table and field for previews,
-        // but the table has been deleted, then display the settings form.
-        if (isEnforced && !isSettingsOpen && (!urlTable || !urlField)) {
+        // Display the settings form if the settings aren't valid.
+        if (!isValid && !isSettingsOpen) {
             setIsSettingsOpen(true);
         }
-    }, [isEnforced, isSettingsOpen, urlTable, urlField]);
+    }, [isValid, isSettingsOpen]);
 
     // activeTable is briefly null when switching to a newly created table.
     if (!activeTable) {

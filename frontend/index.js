@@ -20,12 +20,12 @@ import {
 import {useSettings} from './settings';
 import SettingsForm from './SettingsForm';
 
-// How this app chooses a preview to show:
+// How this extension chooses a preview to show:
 //
 // Without a specified Table & Field:
 //
 //  - When the user selects a cell in grid view and the field's content is
-//    a supported preview URL, the app uses this URL to construct an embed
+//    a supported preview URL, the extension uses this URL to construct an embed
 //    URL and inserts this URL into an iframe.
 //
 // To Specify a Table & Field:
@@ -39,12 +39,12 @@ import SettingsForm from './SettingsForm';
 //  - When the user selects a cell in grid view and the active table matches
 //    the specified table or when the user opens a record from a button field
 //    in the specified table:
-//    The app looks in the selected record for the
+//    The extension looks in the selected record for the
 //    specified field containing a supported URL (e.g. https://www.youtube.com/watch?v=KYz2wyBy3kc),
 //    and uses this URL to construct an embed URL and inserts this URL into
 //    an iframe.
 //
-function UrlPreviewApp() {
+function UrlPreviewExtension() {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     useSettingsButton(() => setIsSettingsOpen(!isSettingsOpen));
 
@@ -56,7 +56,7 @@ function UrlPreviewApp() {
     // Caches the currently selected record and field in state. If the user
     // selects a record and a preview appears, and then the user de-selects the
     // record (but does not select another), the preview will remain. This is
-    // useful when, for example, the user resizes the apps pane.
+    // useful when, for example, the user resizes the extensions pane.
     const [selectedRecordId, setSelectedRecordId] = useState(null);
     const [selectedFieldId, setSelectedFieldId] = useState(null);
 
@@ -96,7 +96,7 @@ function UrlPreviewApp() {
     // useCallback is used to memoize the callback, to avoid having to register/unregister
     // it unnecessarily.
     const onRecordAction = useCallback(
-        data => {
+        (data) => {
             // Ignore the event if settings are already open.
             // This means we can assume settings are valid (since we force settings to be open if
             // they are invalid).
@@ -107,7 +107,7 @@ function UrlPreviewApp() {
                     } else {
                         // Record is from a mismatching table.
                         setRecordActionErrorMessage(
-                            `This app is set up to preview URLs using records from the "${urlTable.name}" table, but was opened from a different table.`,
+                            `This extension is set up to preview URLs using records from the "${urlTable.name}" table, but was opened from a different table.`,
                         );
                     }
                 } else {
@@ -178,7 +178,7 @@ function UrlPreviewApp() {
 }
 
 // Shows a preview, or a dialog that displays information about what
-// kind of services (URLs) are supported by this app.
+// kind of services (URLs) are supported by this extension.
 function RecordPreviewWithDialog({
     activeTable,
     selectedRecordId,
@@ -303,7 +303,7 @@ function RecordPreview({
     ) {
         return <Text>Switch to a grid view to see previews</Text>;
     } else if (
-        // selectedRecord will be null on app initialization, after
+        // selectedRecord will be null on extension initialization, after
         // the user switches table or view, or if it was deleted.
         selectedRecord === null ||
         // The preview field may have been deleted.
@@ -383,9 +383,15 @@ function getPreviewUrlForCellValue(url) {
 
 const converters = [
     function getAirtablePreviewUrl(url) {
-        const match = url.match(/airtable\.com(\/embed)?\/(shr[A-Za-z0-9]{14}.*)/);
+        // Match on embed or share link with appId or without appId
+        const match = url.match(
+            /airtable\.com(\/embed)?(\/app[A-Za-z0-9]{14})?\/(shr[A-Za-z0-9]{14}.*)/,
+        );
         if (match) {
-            return `https://airtable.com/embed/${match[2]}`;
+            // Return embed link, and include appId if it exists
+            return match[2]
+                ? `https://airtable.com/embed${match[2]}/${match[3]}`
+                : `https://airtable.com/embed/${match[3]}`;
         }
 
         // URL isn't for an Airtable share
@@ -451,11 +457,7 @@ const converters = [
     },
     function getFigmaPreviewUrl(url) {
         // Figma has a regex they recommend matching against
-        if (
-            url.match(
-                /(https:\/\/([\w.-]+\.)?)?figma.com\/(file|proto)\/([0-9a-zA-Z]{22,128})(?:\/.*)?$/,
-            )
-        ) {
+        if (url.match(/https:\/\/[\w.-]+\.?figma.com\/([\w-]+)\/([0-9a-zA-Z]{22,128})(?:\/.*)?$/)) {
             return `https://www.figma.com/embed?embed_host=astra&url=${url}`;
         }
 
@@ -465,7 +467,7 @@ const converters = [
     function getLoomPreviewUrl(url) {
         const match = url.match(/loom\.com\/share\/([\w-]+)(\?|$)/);
         if (match) {
-            return `https://loom.com/embed/${match[1]}`;
+            return `https://www.loom.com/embed/${match[1]}`;
         }
 
         // URL isn't for a Loom video
@@ -491,4 +493,4 @@ const converters = [
     },
 ];
 
-initializeBlock(() => <UrlPreviewApp />);
+initializeBlock(() => <UrlPreviewExtension />);
